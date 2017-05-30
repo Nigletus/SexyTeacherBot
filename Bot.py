@@ -1,6 +1,7 @@
 import hashlib
 import socket
 import ssl
+import re
 
 
 class Bot:
@@ -27,7 +28,7 @@ class Bot:
             exit()
 
     def _send(self, msg):
-        self.s.send(msg.encode("UTF-8"))
+        self.s.send(msg.encode())
 
     def message(self, msg, chan):
         self._send("PRIVMSG %s :%s\r\n" % (chan, msg))
@@ -50,7 +51,6 @@ class Bot:
                 if "PING" in recvd:
                     self.pong(recvd)
                 elif "%s!%s" % (self.conf["nick"], self.conf["user"]) in recvd:
-                    print("[+] Ping completed")
                     break
 
             except socket.timeout:
@@ -60,36 +60,26 @@ class Bot:
         num = msg.strip("PING :")
         self._send("PONG :%s" % num)
 
-    def login(self):
-        self._send("PRIVMSG nickserv :identify %s\r\n" % self.conf["pass"])
-
     def join(self):
         print("[+] Joining channels.\n")
-
-        [self.login() for _ in range(3)]
+        self._send(":source PRIVMSG nickserv :IDENTIFY %s\r\n" % self.conf["pass"])
 
         for x in self.conf["chans"]:
-            self._send("JOIN %s\r\n" % x)
+            self._send(":source JOIN :%s\r\n" % x)
 
-        self._send("MODE %s +B\r\n" % self.conf["nick"])
+        self._send(":source MODE %s +B \r\n" % self.conf["nick"])
 
     def listen(self):
         try:
             recvd = self.s.recv(1024).decode()
         except socket.timeout:
             print("[-] Error: Socket timeout.")
-            self.listen()
+            return self.listen()
 
-        info = recvd.split()[3:]
-        msg = " ".join(info)[1:]
-        nick = recvd.split("!")[0][1:]
-        chan = recvd.split()[2] if "PRIVMSG #" in recvd else None
-
-        if "PING" in recvd:
-            self.pong(recvd)
-        elif "JOIN" in recvd and self.sha2(nick) not in self.data["users"]:
-            msg = "?welcome"
-        elif " " not in nick:
-            print("<%s> %s" % (nick, msg))
-
-        return nick, msg, chan
+        if recvd:
+            # To enable private chat remove the '#' from here: -----------------\_/
+            ping = re.match(r'PING\s(.+)',recvd)
+            if ping:
+                self.pong(ping.group(1))
+            else:
+                return recvd

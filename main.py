@@ -19,9 +19,10 @@ art = """
 
 CONF_FILENAME = "conf.json"
 
-data = json.load(open(CONF_FILENAME, "r"))
-conf = data["conf"]
+with open(CONF_FILENAME, "r") as _data:
+    data = json.load(_data)
 
+conf = data["conf"]
 bot = Bot(data)
 
 
@@ -99,23 +100,6 @@ def write_data(data, filename):
     json.dump(data, w)
 
 
-def add_user(user):
-    sha2 = bot.sha2(user)
-    if sha2 not in data["users"]:
-        data["users"].append(sha2)
-        write_data(data, CONF_FILENAME)
-        bot.notice(user, "You have been added to the database.")
-
-
-def goldmine(nick=None):
-    msg = ("Get your computer sk1llz improved with these amazing courses! -> download -> www.ghostbin.com/paste/wsyuc "
-           "or www.github.com/caseanon/Dump || WATCH ONLINE http://handbookproject.github.io")
-
-    add_user(nick) if nick else None
-
-    return check_nick(msg, nick)
-
-
 def get_argument(msg):
     m = msg.split()
     a = m[1] if len(m) > 1 else None
@@ -134,27 +118,36 @@ def exec_command(cmd, arg):
 
 def listen_irc():
     while True:
-        user, msg, chan = bot.listen()
-        arg = get_argument(msg)
+        found = re.match(r'^:([^!\s]+)!([^@\s]+@[^\s]+)\s(PRIVMSG|JOIN)\s:?(#[^:\s]+)(?:\s:(.+))?', bot.listen())
+        '''
+        re groups:
+        if JOIN:    0 all, 1 nick, 2 host, 3 JOIN, 4 channel, 5 none
+        if PRIVMSG: 0 all, 1 nick, 2 host, 3 PIVMSG, 4 channel, 5 msg
+        
+        '''
+        # Finds JOIN and send msg/add user to list if not already in list.
+        if found and found.group(3) in 'JOIN':
+            if not bot.sha2(found.group(1)) in data['users'] and found.group(4) in '#learninghub':
+                welcome(found.group(1))
+                data['users'].append(bot.sha2(found.group(1)))
 
-        if msg == "?welcome" or msg == "?w":
-            welcome(user)
-        elif msg and msg[0] == '?':
-            try:
-                cmd = msg[1:].split()[0].lower()
-            except:
-                cmd = ""
+        elif found:
+            cmd = re.match(r'^\?(\w+)(?:\s)(.+)?', found.group(5))
+            '''
+            re groups:
+            0 all, 1 cmd, 2 arg
+            
+            '''
+            arg = cmd.group(2)
+            if cmd.group(1) in data["commands"]:
+                response = data["commands"][cmd]
+                if arg:
+                    response = "%s: %s" % (arg, response)
 
-            if msg == "?goldmine" or msg == "?gm":
-                add_user(user)
-                response = goldmine(arg)
-            elif cmd in data["commands"]:
-                response = check_nick(data["commands"][cmd], arg)
-            elif cmd in data["defs"]:
+            elif cmd.group(1) in data["defs"]:
                 response = exec_command(cmd, arg)
             else:
                 response = "The command you are trying to execute does not exist."
-
             bot.message(response, chan) if response else None
 
 
@@ -162,7 +155,6 @@ def main():
     print(art)
     bot.auth()
     bot.ping()
-    time.sleep(1)
     bot.join()
     threading.Thread(target=chat).start()
     threading.Thread(target=jew).start()
