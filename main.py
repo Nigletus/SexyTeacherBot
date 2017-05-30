@@ -99,13 +99,21 @@ def write_data(data, filename):
     json.dump(data, w)
 
 
-def adduser(nick, user):
-    if user in data["admins"]:
-        data["users"].append(bot.sha2(nick))
+def add_user(user):
+    sha2 = bot.sha2(user)
+    if sha2 not in data["users"]:
+        data["users"].append(sha2)
         write_data(data, CONF_FILENAME)
-        return "%s has been added to database." % nick
-    else:
-        return "Only bot admins can add users to the database."
+        bot.notice(user, "You have been added to the database.")
+
+
+def goldmine(nick=None):
+    msg = ("Get your computer sk1llz improved with these amazing courses! -> download -> www.ghostbin.com/paste/wsyuc "
+           "or www.github.com/caseanon/Dump || WATCH ONLINE http://handbookproject.github.io")
+
+    add_user(nick) if nick else None
+
+    return check_nick(msg, nick)
 
 
 def get_argument(msg):
@@ -132,15 +140,16 @@ def listen_irc():
         if msg == "?welcome" or msg == "?w":
             welcome(user)
         elif msg and msg[0] == '?':
-            cmd = msg[1:].split()[0].lower()
+            try:
+                cmd = msg[1:].split()[0].lower()
+            except:
+                cmd = ""
 
-            if cmd == "adduser" or cmd == "add":
-                nick = get_argument(msg)
-                response = adduser(nick, user)
+            if msg == "?goldmine" or msg == "?gm":
+                add_user(user)
+                response = goldmine(arg)
             elif cmd in data["commands"]:
-                response = data["commands"][cmd]
-                if arg:
-                    response = "%s: %s" % (arg, response)
+                response = check_nick(data["commands"][cmd], arg)
             elif cmd in data["defs"]:
                 response = exec_command(cmd, arg)
             else:
@@ -153,6 +162,7 @@ def main():
     print(art)
     bot.auth()
     bot.ping()
+    time.sleep(1)
     bot.join()
     threading.Thread(target=chat).start()
     threading.Thread(target=jew).start()
